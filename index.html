@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#071710">
+<title>VERDE Miner</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src='//libtl.com/sdk.js' data-zone='12298058' data-sdk='show_12298058'></script>
+<script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+<script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
+<style>
+:root{--bg:#071710;--panel:#10251b;--line:#244633;--green:#45e58e;--mint:#a4f4c5;--muted:#8ba997;--white:#f2fff6}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 50% -15%,#1b5035,#0b2117 40%,var(--bg));color:var(--white);font:15px system-ui,Arial;min-height:100vh}
+.app{max-width:480px;margin:auto;padding:18px 16px 105px}
+.top{display:flex;align-items:center;justify-content:space-between;margin:4px 0 22px}
+.brand{display:flex;align-items:center;gap:11px}
+.logo{width:44px;height:44px;border-radius:15px;object-fit:cover}
+.brand strong{letter-spacing:2px}
+.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:2px}
+.avatar{width:38px;height:38px;border-radius:50%;background:#183b29;display:grid;place-items:center;color:var(--mint)}
+.eyebrow{font-size:11px;color:var(--muted)}
+h1{font-size:25px;margin:7px 0}
+h3{margin:18px 0 8px}
+p{color:var(--muted);line-height:1.5}
+.card{background:linear-gradient(145deg,#153b28,#10251b);border:1px solid #2b5b3e;border-radius:22px;padding:20px;margin:15px 0}
+.balance{font-size:35px;font-weight:800;margin:9px 0}
+.unit{font-size:14px;color:var(--mint)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#0b1d14;border:1px solid var(--line);border-radius:16px;padding:14px}
+.stat b{display:block;font-size:18px;margin-top:6px}
+.btn{border:0;border-radius:14px;padding:14px;background:linear-gradient(100deg,#4be995,#20b96d);color:#062015;font-weight:800;width:100%;cursor:pointer;font-size:15px;margin-top:10px}
+.btn.secondary{background:#1b3b2a;color:var(--mint);border:1px solid #356a49}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,input:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+input{width:100%;background:#0b1d14;border:1px solid var(--line);border-radius:12px;padding:13px;color:var(--white);font-size:14px;margin-top:8px}
+.section{display:none}.section.active{display:block}
+.nav{position:fixed;bottom:0;left:0;right:0;background:#091a12ed;border-top:1px solid var(--line);padding:9px 5px calc(9px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center}
+.navinner{width:min(480px,100%);display:grid;grid-template-columns:repeat(6,1fr)}
+.nav button{background:none;border:0;color:var(--muted);font-size:10px;padding:7px 1px;display:grid;gap:5px;justify-items:center}
+.nav button span{font-size:18px}.nav button.active{color:var(--green)}
+.progress{height:9px;background:#07130d;border-radius:20px;overflow:hidden;margin:12px 0}
+.progress i{display:block;height:100%;width:0;background:var(--green);transition:width .6s}
+.item{padding:14px 0;border-bottom:1px solid var(--line)}
+.pill{font-size:11px;color:var(--mint);background:#1b4930;padding:6px 10px;border-radius:20px;white-space:nowrap}
+.notice{padding:12px 14px;border-radius:13px;background:#182d21;color:var(--muted);font-size:12px;line-height:1.5;margin:12px 0}
+.small{font-size:12px}
+.live{font-size:40px;font-weight:800;color:var(--green);margin:6px 0;font-variant-numeric:tabular-nums}
+#toast{position:fixed;left:50%;top:14px;transform:translate(-50%,-90px);background:#1b4930;color:var(--white);border:1px solid #3f8a5d;padding:11px 16px;border-radius:14px;font-size:13px;max-width:90%;transition:transform .3s;z-index:30}
+#toast.show{transform:translate(-50%,0)}#toast.err{background:#4a1f1f;border-color:#8a3f3f}
+#adBox{position:fixed;inset:0;background:#000c;display:none;place-items:center;z-index:40}
+#adBox div{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px;text-align:center}
+.usd{color:var(--muted);font-size:.45em;font-weight:600;margin-left:6px;white-space:nowrap}
+.linkbox{background:#0b1d14;border:1px solid var(--line);border-radius:12px;padding:13px;margin-top:8px;font-size:12px;word-break:break-all;color:var(--mint);user-select:none;-webkit-user-select:none}
+adsgram-task{display:block;margin-top:10px}
+@media (prefers-reduced-motion:reduce){.progress i,#toast{transition:none}}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+<div id="adBox"><div><div class="eyebrow">Rewarded ad</div><div class="balance" id="adCount">15</div><p>Please wait for the ad to finish</p></div></div>
+
+<div class="app">
+<header class="top">
+ <div class="brand">
+  <img class="logo" src="https://i.ibb.co/XrYqqWHL/IMG-20261118-WA9263.jpg" alt="VERDE">
+  <div><strong>VERDE MINER</strong><small>GROW YOUR VERDE</small></div>
+ </div>
+ <div class="avatar" id="avatar">V</div>
+</header>
+
+<section id="home" class="section active">
+ <div class="eyebrow">Your in-app balance</div>
+ <div class="balance"><span id="balance">—</span> <span class="unit">VERDE</span><span class="usd" id="usdBal"></span></div>
+ <div class="row small"><span>External holdings are separate</span><span class="pill" id="levelPill">Level —</span></div>
+ <div class="progress"><i id="levelBar"></i></div>
+ <div class="small" id="levelText"></div>
+
+ <div class="card">
+  <div class="row">
+   <div><div class="eyebrow">Mining status</div><h1 id="mineStatus">Connecting...</h1></div>
+   <span class="pill" id="ratePill">— VERDE/day</span>
+  </div>
+  <div class="live" id="liveAmt">0.0000</div>
+  <div class="progress"><i id="mineBar"></i></div>
+  <p id="mineInfo" class="small">Open VERDE Miner inside Telegram to sign in.</p>
+  <button class="btn" id="mineBtn" disabled>Please wait</button>
+ </div>
+ <div class="notice">A new 24-hour mining round starts automatically after every claim. Claiming needs a rewarded ad.</div>
+ <div class="notice priceNote"></div>
+</section>
+
+<section id="holdings" class="section">
+ <div class="eyebrow">Portfolio</div>
+ <h1>Your holdings</h1>
+ <p>Your VERDE balance sets your mining level.</p>
+ <div class="card">
+  <div class="eyebrow">Eligible holdings</div>
+  <div class="balance"><span id="hBal">—</span> <span class="unit">VERDE</span><span class="usd" id="hUsd"></span></div>
+  <div class="row"><span>Current level</span><b id="hLevel">—</b></div>
+  <div class="progress"><i id="hBar"></i></div>
+  <div class="row small"><span>Next level needs</span><b id="hNext">—</b></div>
+ </div>
+ <div class="stats">
+  <div class="stat"><span class="eyebrow">In-app balance</span><b id="hBal2">—</b></div>
+  <div class="stat"><span class="eyebrow">External wallets</span><b id="hExt">—</b></div>
+ </div>
+ <div class="notice">External VERDE will affect your level but is never added to your in-app balance.</div>
+</section>
+
+<section id="tasks" class="section">
+ <div class="eyebrow">Earn VERDE</div>
+ <h1>Tasks & rewards</h1>
+ <div class="card">
+  <div class="row"><b>Rewarded ads</b><span class="pill" id="adPill">—</span></div>
+  <p class="small" id="adInfo">Watch an ad to earn VERDE.</p>
+  <button class="btn" id="adBtn" disabled>Watch ad</button>
+ </div>
+ <div class="card" id="spCard" style="display:none">
+  <div class="row"><b>Sponsored tasks</b><span class="pill" id="spPill">—</span></div>
+  <p class="small" id="spInfo"></p>
+  <adsgram-task data-block-id="task-60912" data-debug="false" id="spTask">
+   <span slot="reward" class="pill">+10 VERDE</span>
+   <div slot="button" class="btn secondary">Go</div>
+   <div slot="claim" class="btn">Claim</div>
+   <div slot="done" class="pill">Done</div>
+  </adsgram-task>
+ </div>
+ <div class="item">
+  <div class="row"><div><b>Join the official channel</b><div class="small" id="chInfo">—</div></div></div>
+  <button class="btn secondary" id="chJoin">Open channel</button>
+  <button class="btn" id="chClaim">Check and claim</button>
+ </div>
+ <div class="item">
+  <div class="row"><div><b>Daily holder bonus</b><div class="small" id="hbInfo">—</div></div></div>
+  <button class="btn" id="hbClaim">Claim bonus</button>
+ </div>
+</section>
+
+<section id="friends" class="section">
+ <div class="eyebrow">Invite and earn</div>
+ <h1>Referral network</h1>
+ <div class="card">
+  <div class="balance"><span id="refReward">100</span> <span class="unit">VERDE</span><span class="usd" id="refUsd"></span></div>
+  <p>You earn this when a friend you invited claims their first mining reward.</p>
+  <div class="stats">
+   <div class="stat"><span class="eyebrow">Verified referrals</span><b id="refVerified">—</b></div>
+   <div class="stat"><span class="eyebrow">Needed to withdraw</span><b>2</b></div>
+  </div>
+  <div class="linkbox" id="refLink">—</div>
+  <button class="btn" id="refCopy">Copy invite link</button>
+ </div>
+ <div class="notice">Self-referrals and duplicate accounts do not qualify.</div>
+</section>
+
+<section id="wallet" class="section">
+ <div class="eyebrow">TON wallet</div>
+ <h1>Withdraw</h1>
+ <div class="card">
+  <div class="eyebrow">Available balance</div>
+  <div class="balance"><span id="wBal">—</span> <span class="unit">VERDE</span><span class="usd" id="wUsd"></span></div>
+  <div class="item row"><span>Withdrawal range</span><b id="wMin">—</b></div>
+  <div class="item row"><span>Verified referrals</span><b id="wRef">—</b></div>
+  <p class="small" id="wAddrView">Connect your TON wallet to withdraw.</p>
+  <div id="tonBtn"></div>
+  <input id="wAmt" type="number" inputmode="decimal" placeholder="Amount in VERDE">
+  <button class="btn" id="wBtn">Request withdrawal</button>
+ </div>
+ <h3>Recent requests</h3>
+ <div id="wList" class="small"></div>
+ <div class="notice priceNote"></div>
+ <div class="notice">Never enter your wallet recovery phrase anywhere. Withdrawals are sent automatically every 4 hours.</div>
+</section>
+
+<section id="profile" class="section">
+ <div class="eyebrow">Account</div>
+ <h1>Profile</h1>
+ <div class="card">
+  <div class="row"><b id="profileName">Telegram user</b><span class="pill" id="authState">Checking</span></div>
+  <p id="profileUsername">—</p>
+  <div class="item row"><span>Network</span><b>TON</b></div>
+  <div class="item row"><span>Token</span><b>VERDE</b></div>
+  <button class="btn secondary" id="refreshBtn">Refresh account</button>
+ </div>
+ <div class="notice" id="statusNote">Connecting to the secure backend.</div>
+</section>
+</div>
+
+<nav class="nav"><div class="navinner">
+ <button class="active" data-tab="home"><span>⌂</span>Home</button>
+ <button data-tab="holdings"><span>◈</span>Holdings</button>
+ <button data-tab="tasks"><span>✓</span>Tasks</button>
+ <button data-tab="friends"><span>♧</span>Friends</button>
+ <button data-tab="wallet"><span>◇</span>Wallet</button>
+ <button data-tab="profile"><span>☻</span>Profile</button>
+</div></nav>
+
+<script>
+const SUPABASE_URL="https://jwdtgcchaadeyqozszbv.supabase.co";
+const SUPABASE_KEY="sb_publishable_SLIvpBXY57PDiNSZ_64KyA_ABxzteGD";
+const API=SUPABASE_URL+"/functions/v1/api";
+const BOT="Verdeminerbot";
+const MONETAG_ZONE=12298058;
+
+const $=id=>document.getElementById(id);
+const tg=window.Telegram?.WebApp;
+const fmt=(n,d=2)=>Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
+const statusLabel={queued:"Next payout",processing:"Sending",confirmed:"Paid",failed:"Under review",refunded:"Refunded"};
+const APP_URL="https://salaudeenabdrahman2-a11y.github.io/Verde-miner/";
+const locks=new Set();const locked=k=>locks.has(k);
+let S=null,offset=0,token=localStorage.getItem("verde_session"),refLinkValue="";
+const usd=n=>{const v=Number(n)*(S?.usd_per_verde||0);return "≈ $"+(v>=1?v.toFixed(2):v.toFixed(3))};
+
+function toast(msg,err){const t=$("toast");t.textContent=msg;t.className="show"+(err?" err":"");clearTimeout(toast.t);toast.t=setTimeout(()=>t.className="",3200)}
+
+function showTab(name){
+ document.querySelectorAll(".section").forEach(s=>s.classList.toggle("active",s.id===name));
+ document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+}
+document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
+
+async function api(action,payload={},auth=true){
+ const res=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,...(auth&&token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({action,...payload})});
+ const d=await res.json().catch(()=>({}));
+ if(!res.ok||d.success===false)throw new Error(d.error||"Backend request failed");
+ return d;
+}
+
+function cooldown(ts){
+ if(!ts)return 0;
+ return Math.max(0,new Date(ts).getTime()+864e5-(Date.now()+offset));
+}
+function hoursLeft(ms){const h=Math.ceil(ms/36e5);return "Available in "+h+"h"}
+
+function render(){
+ if(!S)return;
+ const L=locked;
+ $("balance").textContent=fmt(S.balance);$("usdBal").textContent=usd(S.balance);
+ $("hUsd").textContent=usd(S.holdings);$("wUsd").textContent=usd(S.balance);
+ $("levelPill").textContent="Level "+S.level;
+ $("ratePill").textContent=fmt(S.rate)+" VERDE/day "+usd(S.rate);
+ const span=S.next_threshold?S.next_threshold-S.level_floor:1;
+ const pct=S.next_threshold?Math.min(100,(S.holdings-S.level_floor)/span*100):100;
+ $("levelBar").style.width=pct+"%";$("hBar").style.width=pct+"%";
+ $("levelText").textContent=S.next_threshold?fmt(S.next_threshold-S.holdings)+" VERDE to level "+(S.level+1):"Maximum level reached";
+ $("hBal").textContent=fmt(S.holdings);$("hBal2").textContent=$("wBal").textContent=fmt(S.balance);$("hExt").textContent=S.wallet?fmt(S.external)+" VERDE":"Connect a wallet";
+ $("hLevel").textContent="Level "+S.level;
+ $("hNext").textContent=S.next_threshold?fmt(S.next_threshold)+" VERDE":"Max level";
+ document.querySelectorAll(".priceNote").forEach(e=>e.textContent="Launch price: 1,000 VERDE = "+usd(1000).replace("≈ ","")+". This is not a guaranteed market value.");
+ $("adPill").textContent=S.ads_today+"/"+S.ads_limit+" today";
+ $("adInfo").textContent="Earn "+fmt(S.ad_reward)+" VERDE "+usd(S.ad_reward)+" for each ad.";
+ const adOff=S.ads_today>=S.ads_limit;
+ $("adBtn").disabled=L("adslot")||L("interstitial")||adOff;
+ $("adBtn").textContent=adOff?"Daily limit reached":L("adslot")?"Please wait...":"Watch ad (+"+fmt(S.ad_reward)+")";
+ const chCd=cooldown(S.channel_claimed_at);
+ $("chInfo").textContent=!S.channel?"Not available yet":chCd?hoursLeft(chCd):"+"+fmt(S.channel_reward)+" VERDE "+usd(S.channel_reward)+" every 24 hours";
+ $("chJoin").style.display=S.channel?"":"none";
+ $("chClaim").disabled=L("channel")||!S.channel||chCd>0;
+ const hbCd=cooldown(S.holding_claimed_at);
+ const hbOk=S.holdings>=S.holding_threshold;
+ $("hbInfo").textContent=hbCd?hoursLeft(hbCd):hbOk?"+"+fmt(S.holding_reward)+" VERDE "+usd(S.holding_reward)+" every 24 hours":"Hold "+fmt(S.holding_threshold)+" VERDE to unlock";
+ $("hbClaim").disabled=L("holding")||hbCd>0||!hbOk;
+ $("spCard").style.display=S.adsgram_enabled?"":"none";
+ $("spPill").textContent=S.sponsored_left+" left today";
+ $("spInfo").textContent="Earn "+fmt(S.sponsored_reward)+" VERDE "+usd(S.sponsored_reward)+" per sponsored task.";
+ $("refReward").textContent=fmt(S.referral_reward);$("refUsd").textContent=usd(S.referral_reward);
+ $("refVerified").textContent=S.referrals_verified+" of "+S.referrals_total;
+ $("wRef").textContent=S.referrals_verified+" / 2";
+ $("wMin").textContent=fmt(S.withdraw_min)+" to "+fmt(S.withdraw_max)+" VERDE ("+usd(S.withdraw_min)+" to "+usd(S.withdraw_max)+")";
+ $("wAddrView").textContent=S.wallet?"Wallet connected: "+S.wallet.slice(0,6)+"..."+S.wallet.slice(-6):"Connect your TON wallet to withdraw.";
+ $("tonBtn").style.display=S.wallet?"none":"";
+ $("wBtn").disabled=L("withdraw")||!S.wallet;
+ $("wList").innerHTML=S.withdrawals.length?S.withdrawals.map(w=>`<div class="item row"><span>${fmt(w.amount)} VERDE <span class="usd">${usd(w.amount)}</span></span><span class="pill">${statusLabel[w.status]||w.status}</span></div>`).join(""):"<p>No requests yet.</p>";
+ tick();
+}
+
+function tick(){
+ if(!S)return;
+ const btn=$("mineBtn");
+ if(!S.session){
+  $("mineStatus").textContent="Ready to mine";
+  $("liveAmt").textContent="0.0000";$("mineBar").style.width="0%";
+  $("mineInfo").textContent="Start a 24-hour mining round.";
+  btn.textContent="Start mining";btn.disabled=locked("mine");btn.dataset.mode="start";return;
+ }
+ const st=new Date(S.session.started_at).getTime(),en=new Date(S.session.ends_at).getTime();
+ const now=Date.now()+offset,frac=Math.min(1,Math.max(0,(now-st)/(en-st)));
+ const amt=S.rate*((en-st)/36e5/24)*frac;
+ $("liveAmt").textContent=amt.toFixed(4);
+ $("mineBar").style.width=(frac*100)+"%";
+ const done=frac>=1;
+ $("mineStatus").textContent=done?"Round complete":"Mining...";
+ $("mineInfo").textContent=(done?"Your reward is ready. Watch an ad to claim. ":"Time left: "+Math.ceil((en-now)/36e5)+"h. You can claim any time. ")+"Worth "+usd(amt)+" now.";
+ btn.textContent=locked("mine")?"Please wait...":"Claim "+amt.toFixed(2)+" VERDE (watch ad)";
+ btn.disabled=locked("mine")||locked("adslot")||locked("interstitial");btn.dataset.mode="claim";
+}
+setInterval(tick,1000);
+
+function setState(d){
+ if(!d.state)return;
+ S=d.state;offset=new Date(S.server_time).getTime()-Date.now();render();
+}
+
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+// ---- Ads: Adsgram first (only when enabled in the database), Monetag as backup
+async function runAd(adId){
+ if(S?.adsgram_enabled&&window.Adsgram){
+  try{await window.Adsgram.init({blockId:"60910"}).show();return "adsgram"}
+  catch(r){if(r&&r.error===false)throw new Error("Watch the full ad to get the reward")}
+ }
+ const fn=window["show_"+MONETAG_ZONE];
+ if(typeof fn!=="function")throw new Error("No ad available right now. Try again later.");
+ try{await fn({ymid:adId})}catch(e){throw new Error("The ad could not be shown. Try again.")}
+ return "monetag";
+}
+async function confirmAd(id,net){
+ for(let i=0;i<10;i++){
+  try{return await api("ad_complete",{ad_id:id,network:net})}
+  catch(e){
+   if(!/Waiting for ad confirmation/.test(e.message))throw e;
+   if(i===9)throw new Error("We could not confirm the ad. Please try again.");
+   await sleep(2000);
+  }
+ }
+}
+async function claimSponsored(){
+ for(let i=0;i<10;i++){
+  try{return await api("claim_sponsored")}
+  catch(e){
+   if(!/Waiting for task confirmation/.test(e.message))throw e;
+   if(i===9)throw new Error("Could not confirm the task yet. Try again later.");
+   await sleep(2000);
+  }
+ }
+}
+
+// Each action has its own lock, so different tasks can run at the same time.
+async function act(keys,fn,okMsg){
+ keys=[].concat(keys);
+ if(keys.some(k=>locks.has(k)))return;
+ keys.forEach(k=>locks.add(k));render();
+ try{const d=await fn();if(d)setState(d);if(okMsg)toast(typeof okMsg==="function"?okMsg(d):okMsg)}
+ catch(e){toast(e.message,true);if(/session/i.test(e.message)){localStorage.removeItem("verde_session");token=null}}
+ finally{keys.forEach(k=>locks.delete(k));render()}
+}
+
+async function adFlow(placement,after){
+ if(locked("interstitial"))throw new Error("Please wait a moment and try again");
+ toast("Loading ad...");
+ const {ad_id}=await api("ad_start",{placement});
+ const t0=Date.now();
+ const network=await runAd(ad_id);
+ const wait=16000-(Date.now()-t0);
+ if(wait>0)await sleep(wait);
+ const done=await confirmAd(ad_id,network);
+ return after(ad_id,done);
+}
+
+// ---- Interstitials: first after 10 s, then every 40 s (values come from the database)
+let intTimer=null;
+function scheduleInt(ms){clearTimeout(intTimer);intTimer=setTimeout(showInt,ms)}
+async function showInt(){
+ const every=(S?.int_every||40)*1000;
+ if(!window.Adsgram||locked("adslot")){scheduleInt(every);return}
+ locks.add("interstitial");render();
+ try{await window.Adsgram.init({blockId:"int-60911"}).show()}catch{}
+ locks.delete("interstitial");render();scheduleInt(every);
+}
+
+$("mineBtn").addEventListener("click",()=>{
+ if($("mineBtn").dataset.mode==="start")
