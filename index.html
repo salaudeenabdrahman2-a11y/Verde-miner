@@ -55,11 +55,13 @@ input{width:100%;background:#0b1d14;border:1px solid var(--line);border-radius:1
 .usd{color:var(--muted);font-size:.45em;font-weight:600;margin-left:6px;white-space:nowrap}
 .linkbox{background:#0b1d14;border:1px solid var(--line);border-radius:12px;padding:13px;margin-top:8px;font-size:12px;word-break:break-all;color:var(--mint);user-select:none;-webkit-user-select:none}
 adsgram-task{display:block;margin-top:10px}
+#dbg{display:none;position:fixed;left:8px;right:8px;bottom:84px;background:#4a1f1f;border:1px solid #8a3f3f;color:#ffd9d9;padding:10px;border-radius:12px;font-size:11px;z-index:50;word-break:break-word}
 @media (prefers-reduced-motion:reduce){.progress i,#toast{transition:none}}
 </style>
 </head>
 <body>
 <div id="toast"></div>
+<div id="dbg"></div>
 <div id="adBox"><div><div class="eyebrow">Rewarded ad</div><div class="balance" id="adCount">15</div><p>Please wait for the ad to finish</p></div></div>
 
 <div class="app">
@@ -198,6 +200,10 @@ adsgram-task{display:block;margin-top:10px}
 </div></nav>
 
 <script>
+let step="page loaded";
+function dbg(m){const e=document.getElementById("dbg");if(e){e.style.display="block";e.textContent=m}}
+window.addEventListener("error",ev=>dbg("Script error: "+ev.message+" (line "+ev.lineno+")"));
+window.addEventListener("unhandledrejection",ev=>dbg("Error: "+((ev.reason&&ev.reason.message)||ev.reason)));
 const SUPABASE_URL="https://jwdtgcchaadeyqozszbv.supabase.co";
 const SUPABASE_KEY="sb_publishable_SLIvpBXY57PDiNSZ_64KyA_ABxzteGD";
 const API=SUPABASE_URL+"/functions/v1/api";
@@ -222,7 +228,11 @@ function showTab(name){
 document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
 
 async function api(action,payload={},auth=true){
- const res=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,...(auth&&token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({action,...payload})});
+ const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),25000);
+ let res;
+ try{res=await fetch(API,{method:"POST",signal:ctl.signal,headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,...(auth&&token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({action,...payload})})}
+ catch(e){throw new Error(e.name==="AbortError"?"The server did not answer in time.":"Could not reach the server ("+e.message+")")}
+ finally{clearTimeout(to)}
  const d=await res.json().catch(()=>({}));
  if(!res.ok||d.success===false)throw new Error(d.error||"Backend request failed");
  return d;
@@ -371,4 +381,82 @@ async function showInt(){
 }
 
 $("mineBtn").addEventListener("click",()=>{
- if($("mineBtn").dataset.mode==="start")
+ if($("mineBtn").dataset.mode==="start")act("mine",()=>api("start_mining"),"Mining started");
+ else act(["mine","adslot"],()=>adFlow("mining_claim",id=>api("claim_mining",{ad_id:id})),d=>"Claimed "+fmt(d.reward,4)+" VERDE. A new round has started.");
+});
+$("adBtn").addEventListener("click",()=>act("adslot",()=>adFlow("daily_reward",(id,done)=>done),d=>"+"+fmt(d.reward)+" VERDE"));
+$("chJoin").addEventListener("click",()=>{const u="https://t.me/"+String(S.channel).replace("@","");tg?.openTelegramLink?tg.openTelegramLink(u):window.open(u,"_blank")});
+$("chClaim").addEventListener("click",()=>act("channel",()=>api("claim_task",{code:"official_channel"}),d=>"+"+fmt(d.reward)+" VERDE"));
+$("hbClaim").addEventListener("click",()=>act("holding",()=>api("claim_task",{code:"holding_bonus"}),d=>"+"+fmt(d.reward)+" VERDE"));
+$("wBtn").addEventListener("click",()=>act("withdraw",()=>api("withdraw",{amount:Number($("wAmt").value),key:crypto.randomUUID()}),"Withdrawal requested"));
+$("spTask").addEventListener("reward",()=>act("sponsored",()=>claimSponsored(),d=>"+"+fmt(d.reward)+" VERDE"));
+$("refCopy").addEventListener("click",async()=>{
+ try{await navigator.clipboard.writeText(refLinkValue);toast("Invite link copied")}
+ catch{toast("Could not copy. Try again.",true)}
+});
+
+// ---- TON wallet connect (ownership proof checked by the server)
+let tonUI=null;
+function initWallet(){
+ if(tonUI||!window.TON_CONNECT_UI)return;
+ tonUI=new TON_CONNECT_UI.TonConnectUI({manifestUrl:APP_URL+"tonconnect-manifest.json",buttonRootId:"tonBtn",actionsConfiguration:{twaReturnUrl:"https://t.me/"+BOT}});
+ tonUI.onStatusChange(w=>{
+  const proof=w?.connectItems?.tonProof?.proof;
+  if(!w||!proof||S?.wallet)return;
+  act("wallet",()=>api("wallet_link",{address:w.account.address,publicKey:w.account.publicKey,proof}),"Wallet connected");
+ });
+}
+async function prepareProof(){
+ if(!tonUI||S?.wallet)return;
+ tonUI.setConnectRequestParameters({state:"loading"});
+ try{const {payload}=await api("wallet_payload");tonUI.setConnectRequestParameters({state:"ready",value:{tonProof:payload}})}
+ catch{tonUI.setConnectRequestParameters(null)}
+}
+
+let started=false;
+async function boot(){
+ step="starting";
+ tg?.ready();tg?.expand();
+ if(!localStorage.getItem("verde_wa")){localStorage.setItem("verde_wa","1");try{tg?.requestWriteAccess?.(()=>{})}catch{}}
+ try{tg?.setHeaderColor?.("#071710");tg?.setBackgroundColor?.("#071710")}catch{}
+ const initData=tg?.initData||"";
+ const u=tg?.initDataUnsafe?.user;
+ if(u){
+  $("profileName").textContent=[u.first_name,u.last_name].filter(Boolean).join(" ");
+  $("profileUsername").textContent=u.username?"@"+u.username:"Telegram account connected";
+  $("avatar").textContent=(u.first_name||"V").slice(0,1).toUpperCase();
+  refLinkValue="https://t.me/"+BOT+"?startapp="+u.id;$("refLink").textContent=refLinkValue;
+ }
+ try{
+  let d;
+  if(initData){
+   step="waiting for the server (login)";
+   d=await api("login",{initData,ref:tg?.initDataUnsafe?.start_param||""},false);
+   token=d.session_token;localStorage.setItem("verde_session",token);
+  }else if(token){d=await api("state")}
+  else{
+   $("authState").textContent="Open in Telegram";
+   $("mineStatus").textContent="Telegram sign-in needed";
+   $("mineInfo").textContent="Launch this app from @"+BOT+".";
+   return;
+  }
+  step="login answered";
+  setState(d);
+  step="done";
+  $("authState").textContent="Signed in";
+  $("statusNote").textContent="Connected to the secure backend.";
+  initWallet();prepareProof();
+  if(!started){started=true;scheduleInt((S.int_first||10)*1000)}
+ }catch(e){
+  $("authState").textContent="Connection error";
+  $("mineStatus").textContent="Could not connect";
+  $("mineInfo").textContent=e.message;
+  $("statusNote").textContent=e.message;
+ }
+}
+$("refreshBtn").addEventListener("click",boot);
+boot();
+setTimeout(()=>{if(!S)dbg("Still connecting after 15 seconds. Step: "+step)},15000);
+</script>
+</body>
+</html>
