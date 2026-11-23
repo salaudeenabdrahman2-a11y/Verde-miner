@@ -7,7 +7,7 @@
 <title>VERDE Miner</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src='//libtl.com/sdk.js' data-zone='12298058' data-sdk='show_12298058'></script>
-<script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+<script src="https://w.tads.me/widget.js"></script>
 <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
 <style>
 :root{--bg:#071710;--panel:#10251b;--line:#244633;--green:#45e58e;--mint:#a4f4c5;--muted:#8ba997;--white:#f2fff6}
@@ -54,7 +54,6 @@ input{width:100%;background:#0b1d14;border:1px solid var(--line);border-radius:1
 #adBox div{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px;text-align:center}
 .usd{color:var(--muted);font-size:.45em;font-weight:600;margin-left:6px;white-space:nowrap}
 .linkbox{background:#0b1d14;border:1px solid var(--line);border-radius:12px;padding:13px;margin-top:8px;font-size:12px;word-break:break-all;color:var(--mint);user-select:none;-webkit-user-select:none}
-adsgram-task{display:block;margin-top:10px}
 #dbg{display:none;position:fixed;left:8px;right:8px;bottom:84px;background:#4a1f1f;border:1px solid #8a3f3f;color:#ffd9d9;padding:10px;border-radius:12px;font-size:11px;z-index:50;word-break:break-word}
 @media (prefers-reduced-motion:reduce){.progress i,#toast{transition:none}}
 </style>
@@ -120,15 +119,10 @@ adsgram-task{display:block;margin-top:10px}
   <p class="small" id="adInfo">Watch an ad to earn VERDE.</p>
   <button class="btn" id="adBtn" disabled>Watch ad</button>
  </div>
- <div class="card" id="spCard" style="display:none">
-  <div class="row"><b>Sponsored tasks</b><span class="pill" id="spPill">—</span></div>
+ <div class="card" id="spCard">
+  <div class="row"><b>Sponsored task</b><span class="pill" id="spPill">—</span></div>
   <p class="small" id="spInfo"></p>
-  <adsgram-task data-block-id="task-60912" data-debug="false" id="spTask">
-   <span slot="reward" class="pill">+10 VERDE</span>
-   <div slot="button" class="btn secondary">Go</div>
-   <div slot="claim" class="btn">Claim</div>
-   <div slot="done" class="pill">Done</div>
-  </adsgram-task>
+  <div id="tads-container-13456"></div>
  </div>
  <div class="item">
   <div class="row"><div><b>Join the official channel</b><div class="small" id="chInfo">—</div></div></div>
@@ -272,9 +266,8 @@ function render(){
  const hbOk=S.holdings>=S.holding_threshold;
  $("hbInfo").textContent=hbCd?hoursLeft(hbCd):hbOk?"+"+fmt(S.holding_reward)+" VERDE "+usd(S.holding_reward)+" every 24 hours":"Hold "+fmt(S.holding_threshold)+" VERDE to unlock";
  $("hbClaim").disabled=L("holding")||hbCd>0||!hbOk;
- $("spCard").style.display=S.adsgram_enabled?"":"none";
  $("spPill").textContent=S.sponsored_left+" left today";
- $("spInfo").textContent="Earn "+fmt(S.sponsored_reward)+" VERDE "+usd(S.sponsored_reward)+" per sponsored task.";
+ if(!spNoAd)$("spInfo").textContent=S.sponsored_left>0?"Tap the ad below to earn "+fmt(S.sponsored_reward)+" VERDE "+usd(S.sponsored_reward)+".":"Daily limit reached. Come back tomorrow.";
  $("refReward").textContent=fmt(S.referral_reward);$("refUsd").textContent=usd(S.referral_reward);
  $("refVerified").textContent=S.referrals_verified+" of "+S.referrals_total;
  $("wRef").textContent=S.referrals_verified+" / 2";
@@ -315,12 +308,8 @@ function setState(d){
 
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
-// ---- Ads: Adsgram first (only when enabled in the database), Monetag as backup
+// ---- Rewarded ads: Monetag (the server checks that Monetag reported the view)
 async function runAd(adId){
- if(S?.adsgram_enabled&&window.Adsgram){
-  try{await window.Adsgram.init({blockId:"60910"}).show();return "adsgram"}
-  catch(r){if(r&&r.error===false)throw new Error("Watch the full ad to get the reward")}
- }
  const fn=window["show_"+MONETAG_ZONE];
  if(typeof fn!=="function")throw new Error("No ad available right now. Try again later.");
  try{await fn({ymid:adId})}catch(e){throw new Error("The ad could not be shown. Try again.")}
@@ -348,11 +337,11 @@ async function claimSponsored(){
 }
 
 // Each action has its own lock, so different tasks can run at the same time.
-async function act(keys,fn,okMsg){
+async function act(keys,fn,okMsg,brk){
  keys=[].concat(keys);
  if(keys.some(k=>locks.has(k)))return;
  keys.forEach(k=>locks.add(k));render();
- try{const d=await fn();if(d)setState(d);if(okMsg)toast(typeof okMsg==="function"?okMsg(d):okMsg)}
+ try{const d=await fn();if(d)setState(d);if(okMsg)toast(typeof okMsg==="function"?okMsg(d):okMsg);if(brk)setTimeout(breakAd,3000)}
  catch(e){toast(e.message,true);if(/session/i.test(e.message)){localStorage.removeItem("verde_session");token=null}}
  finally{keys.forEach(k=>locks.delete(k));render()}
 }
@@ -369,27 +358,43 @@ async function adFlow(placement,after){
  return after(ad_id,done);
 }
 
-// ---- Interstitials: first after 10 s, then every 40 s (values come from the database)
-let intTimer=null;
-function scheduleInt(ms){clearTimeout(intTimer);intTimer=setTimeout(showInt,ms)}
-async function showInt(){
- const every=(S?.int_every||40)*1000;
- if(!window.Adsgram||locked("adslot")){scheduleInt(every);return}
- locks.add("interstitial");render();
- try{await window.Adsgram.init({blockId:"int-60911"}).show()}catch{}
- locks.delete("interstitial");render();scheduleInt(every);
+// ---- Interstitials: Monetag in-app ads (first after 10 s, then about every 40 s; settings come from the database)
+function startInterstitials(){
+ const fn=window["show_"+MONETAG_ZONE];
+ if(typeof fn!=="function")return;
+ const every=S?.int_every||40;
+ try{fn({type:"inApp",inAppSettings:{frequency:Math.max(1,Math.round(360/every)),capping:0.1,interval:every,timeout:S?.int_first||10,everyPage:false}})}catch{}
+}
+
+// ---- Tads: fullscreen (13455) only at natural breaks, click widget (13456) in the Tasks tab
+let tadsFull=null,tadsTgb=null,lastFull=0,spNoAd=false;
+function tadsInit(){
+ if(!window.tads||!window.tads.init)return;
+ try{
+  if(!tadsFull)tadsFull=window.tads.init({widgetId:13455,type:"fullscreen",debug:false,onAdsNotFound(){}});
+  if(!tadsTgb){
+   tadsTgb=window.tads.init({widgetId:13456,type:"static",debug:false,
+    onClickReward:()=>act("sponsored",()=>claimSponsored(),d=>"+"+fmt(d.reward)+" VERDE",true),
+    onAdsNotFound:()=>{spNoAd=true;$("spInfo").textContent="No sponsored task available right now. Check back later."}});
+   tadsTgb.loadAd().then(()=>tadsTgb.showAd()).catch(()=>{spNoAd=true;$("spInfo").textContent="No sponsored task available right now. Check back later."});
+  }
+ }catch{}
+}
+function breakAd(){
+ if(!tadsFull||Date.now()-lastFull<60000)return;
+ lastFull=Date.now();
+ tadsFull.showAd().catch(()=>{});
 }
 
 $("mineBtn").addEventListener("click",()=>{
  if($("mineBtn").dataset.mode==="start")act("mine",()=>api("start_mining"),"Mining started");
- else act(["mine","adslot"],()=>adFlow("mining_claim",id=>api("claim_mining",{ad_id:id})),d=>"Claimed "+fmt(d.reward,4)+" VERDE. A new round has started.");
+ else act(["mine","adslot"],()=>adFlow("mining_claim",id=>api("claim_mining",{ad_id:id})),d=>"Claimed "+fmt(d.reward,4)+" VERDE. A new round has started.",true);
 });
 $("adBtn").addEventListener("click",()=>act("adslot",()=>adFlow("daily_reward",(id,done)=>done),d=>"+"+fmt(d.reward)+" VERDE"));
 $("chJoin").addEventListener("click",()=>{const u="https://t.me/"+String(S.channel).replace("@","");tg?.openTelegramLink?tg.openTelegramLink(u):window.open(u,"_blank")});
-$("chClaim").addEventListener("click",()=>act("channel",()=>api("claim_task",{code:"official_channel"}),d=>"+"+fmt(d.reward)+" VERDE"));
-$("hbClaim").addEventListener("click",()=>act("holding",()=>api("claim_task",{code:"holding_bonus"}),d=>"+"+fmt(d.reward)+" VERDE"));
+$("chClaim").addEventListener("click",()=>act("channel",()=>api("claim_task",{code:"official_channel"}),d=>"+"+fmt(d.reward)+" VERDE",true));
+$("hbClaim").addEventListener("click",()=>act("holding",()=>api("claim_task",{code:"holding_bonus"}),d=>"+"+fmt(d.reward)+" VERDE",true));
 $("wBtn").addEventListener("click",()=>act("withdraw",()=>api("withdraw",{amount:Number($("wAmt").value),key:crypto.randomUUID()}),"Withdrawal requested"));
-$("spTask").addEventListener("reward",()=>act("sponsored",()=>claimSponsored(),d=>"+"+fmt(d.reward)+" VERDE"));
 $("refCopy").addEventListener("click",async()=>{
  try{await navigator.clipboard.writeText(refLinkValue);toast("Invite link copied")}
  catch{toast("Could not copy. Try again.",true)}
@@ -446,7 +451,7 @@ async function boot(){
   $("authState").textContent="Signed in";
   $("statusNote").textContent="Connected to the secure backend.";
   initWallet();prepareProof();
-  if(!started){started=true;scheduleInt((S.int_first||10)*1000)}
+  if(!started){started=true;startInterstitials();tadsInit()}
  }catch(e){
   $("authState").textContent="Connection error";
   $("mineStatus").textContent="Could not connect";
